@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบติดตามผู้ป่วยจิตเวชยาฉีด อ.กุสุมาลย์</title>
+    <title>ระบบติดตามผู้ป่วยจิตเวชที่ได้รับยาฉีด อำเภอกุสุมาลย์</title>
     
     <!-- Fonts: Prompt -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -242,7 +242,7 @@
             } else {
                 return {
                     isOverdue: false,
-                    text: `อีก ${durationStr} จะถึงวันนัด`,
+                    text: `อีก ${durationStr}`, // Removed " จะถึงวันนัด"
                     colorClass: 'text-brand-500' 
                 };
             }
