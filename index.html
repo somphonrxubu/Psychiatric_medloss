@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบติดตามผู้ป่วยจิตเวชที่ได้รับยาฉีด อำเภอกุสุมาลย์</title>
+    <title>ระบบติดตามผู้ป่วยที่ได้รับยาฉีด คลินิกฟ้าใส โรงพยาบาลกุสุมาลย์ จังหวัดสกลนคร</title>
     
     <!-- Fonts: Prompt -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -242,7 +242,7 @@
             } else {
                 return {
                     isOverdue: false,
-                    text: `อีก ${durationStr}`, // Removed " จะถึงวันนัด"
+                    text: `อีก ${durationStr}`, 
                     colorClass: 'text-brand-500' 
                 };
             }
@@ -309,6 +309,7 @@
             const [error, setError] = useState(null);
             const [selectedSite, setSelectedSite] = useState('ทั้งอำเภอ');
             const [upcomingSiteFilter, setUpcomingSiteFilter] = useState('ทั้งอำเภอ');
+            const [overdueSiteFilter, setOverdueSiteFilter] = useState('ทั้งอำเภอ');
             const [columnKeys, setColumnKeys] = useState({});
             
             const [stats, setStats] = useState({
@@ -417,7 +418,6 @@
                     }
                 });
 
-                // Change to 1 decimal place
                 const avgAge = validAgeCount > 0 ? (totalAge / validAgeCount).toFixed(1) : 0;
                 if (minAge === 999) minAge = 0;
 
@@ -526,6 +526,66 @@
                 });
             }, [data, selectedSite, columnKeys]);
 
+            // Group filtered data by site for the card view
+            const groupedFilteredPatients = useMemo(() => {
+                const grouped = {};
+                filteredData.forEach(item => {
+                    const site = String(item[columnKeys.site] || 'ไม่ระบุ').trim();
+                    if (!grouped[site]) grouped[site] = [];
+                    grouped[site].push(item);
+                });
+
+                const fixedOrder = ['รพ.กุสุมาลย์', 'บ้านบอน', 'นาเพียงใหม่', 'โพธิไพศาล', 'ห้วยกอก', 'แสนพัน', 'หนองบัวสร้าง'];
+                
+                return Object.entries(grouped).sort((a, b) => {
+                    const idxA = fixedOrder.indexOf(a[0]);
+                    const idxB = fixedOrder.indexOf(b[0]);
+                    const valA = idxA === -1 ? 99 : idxA;
+                    const valB = idxB === -1 ? 99 : idxB;
+                    if (valA !== valB) return valA - valB;
+                    return a[0].localeCompare(b[0], 'th');
+                });
+            }, [filteredData, columnKeys]);
+
+            // OVERDUE FILTERED DATA LOGIC (NEW CARD)
+            const groupedOverduePatients = useMemo(() => {
+                let res = data.filter(item => isDateOverdue(item[columnKeys.nextVisit]));
+
+                if (overdueSiteFilter !== 'ทั้งอำเภอ') {
+                    res = res.filter(item => String(item[columnKeys.site] || '').trim() === overdueSiteFilter);
+                }
+
+                const sortedRes = [...res].sort((a, b) => {
+                    if (!columnKeys.nextVisit) return 0;
+                    const dateObjA = parseThaiDate(a[columnKeys.nextVisit]);
+                    const dateObjB = parseThaiDate(b[columnKeys.nextVisit]);
+                    const timeA = dateObjA ? new Date(dateObjA.yearAD, parseInt(dateObjA.month) - 1, parseInt(dateObjA.day)).getTime() : 0;
+                    const timeB = dateObjB ? new Date(dateObjB.yearAD, parseInt(dateObjB.month) - 1, parseInt(dateObjB.day)).getTime() : 0;
+                    if (timeA !== timeB) return timeB - timeA;
+                    const siteA = String(a[columnKeys.site] || '');
+                    const siteB = String(b[columnKeys.site] || '');
+                    return siteA.localeCompare(siteB, 'th');
+                });
+
+                const grouped = {};
+                sortedRes.forEach(item => {
+                    const site = String(item[columnKeys.site] || 'ไม่ระบุ').trim();
+                    if (!grouped[site]) grouped[site] = [];
+                    grouped[site].push(item);
+                });
+
+                const fixedOrder = ['รพ.กุสุมาลย์', 'บ้านบอน', 'นาเพียงใหม่', 'โพธิไพศาล', 'ห้วยกอก', 'แสนพัน', 'หนองบัวสร้าง'];
+                
+                return Object.entries(grouped).sort((a, b) => {
+                    const idxA = fixedOrder.indexOf(a[0]);
+                    const idxB = fixedOrder.indexOf(b[0]);
+                    const valA = idxA === -1 ? 99 : idxA;
+                    const valB = idxB === -1 ? 99 : idxB;
+                    if (valA !== valB) return valA - valB;
+                    return a[0].localeCompare(b[0], 'th');
+                });
+            }, [data, overdueSiteFilter, columnKeys]);
+
             // Calculate Upcoming Activities using ONLY "Usage" Column logic - Window: 3 Days
             const upcomingActivities = useMemo(() => {
                 const today = new Date();
@@ -592,7 +652,7 @@
             if (loading) return (
                 <div className="flex flex-col items-center justify-center min-h-screen bg-brand-50 text-brand-700">
                     <div className="animate-spin mb-4"><Icon name="loader-2" size={48} /></div>
-                    <p className="text-xl font-medium animate-pulse">กำลังดึงข้อมูลทะเบียนผู้ป่วย...</p>
+                    <p className="text-xl font-medium animate-pulse">กรุณารอสักครู่...</p>
                 </div>
             );
 
@@ -737,7 +797,7 @@
                                                                         <div className="flex-1 min-w-0 py-1">
                                                                             <p className="text-sm font-bold text-gray-900 truncate">
                                                                                 {p[columnKeys.fullname]}
-                                                                                {isOverdue && <span className="text-red-500 text-xs ml-1 font-normal">(ขาดนัดเดิม)</span>}
+                                                                                {isOverdue && <span className="ml-2 bg-red-100 text-red-700 text-[10px] px-1.5 py-0.5 rounded border border-red-200 font-normal">ขาดนัด</span>}
                                                                             </p>
                                                                             <div className="mt-1.5 flex flex-wrap gap-1">
                                                                                 <span className="text-[10px] bg-green-100 text-green-800 px-2 py-0.5 rounded font-medium border border-green-200 truncate max-w-full">
@@ -764,7 +824,7 @@
                             </div>
                         </div>
 
-                        {/* Table Card */}
+                        {/* Table Card (All Patients) */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                             <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
                                 <div className="flex items-center gap-3"><Icon name="clipboard-list" size={24} className="text-brand-500" /><div><h3 className="text-lg font-bold text-gray-800 leading-none">รายละเอียดผู้ป่วยทั้งหมด</h3><p className="text-sm text-gray-500 mt-1">แสดงผล: {filteredData.length} ราย</p></div></div>
@@ -781,48 +841,216 @@
                                     </div>
                                 </div>
                             </div>
-                            <div className="w-full overflow-y-auto max-h-[800px] relative border-t border-gray-100">
-                                <table className="w-full text-sm text-left table-fixed">
-                                    <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b sticky top-0 z-10 shadow-sm">
-                                        <tr>
-                                            <th className="px-4 py-3 font-medium w-[4%] text-center bg-gray-50">ที่</th><th className="px-4 py-3 font-medium w-[25%] text-left bg-gray-50">ชื่อ-สกุล</th><th className="px-4 py-3 font-medium w-[20%] text-left bg-gray-50">ที่อยู่</th><th className="px-4 py-3 font-medium w-[20%] text-left bg-gray-50">รายการยาที่ใช้</th><th className="px-4 py-3 font-medium w-[15%] text-center bg-gray-50">รับบริการล่าสุด</th><th className="px-4 py-3 font-medium w-[15%] text-center bg-gray-50">นัดครั้งต่อไป</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white">
-                                        {filteredData.map((row, idx) => {
-                                            const isOverdue = isDateOverdue(row[columnKeys.nextVisit]);
-                                            const dateDiffInfo = getDateDiffInfo(row[columnKeys.nextVisit]);
-                                            
-                                            return (
-                                                <tr key={idx} className="border-b hover:bg-gray-50 transition-colors">
-                                                    <td className="px-4 py-4 text-center text-gray-500 font-medium align-top pt-4">{idx + 1}</td>
-                                                    <td className="px-4 py-4 align-top"><div className="font-bold text-gray-900 text-base whitespace-nowrap">{row[columnKeys.fullname] || '-'}</div><div className="text-xs text-gray-500 mt-1"><span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 inline-block">HN {row[columnKeys.hn] || '-'} ({row[columnKeys.age] || '-'} ปี)</span></div></td>
-                                                    <td className="px-4 py-4 align-top"><div className="text-gray-900 leading-relaxed break-words">{row[columnKeys.houseNo] || ''} {row[columnKeys.moo] ? `หมู่ ${row[columnKeys.moo]}` : ''} {row[columnKeys.tambon] ? `ต.${row[columnKeys.tambon]}` : ''}</div><div className="text-xs text-brand-600 mt-1.5 font-medium bg-brand-50 inline-flex items-center gap-1 px-2 py-1 rounded max-w-full"><Icon name="map-pin" size={12} className="min-w-[12px]" /><span className="truncate">ฉีดยาที่ {row[columnKeys.site] || '-'}</span></div></td>
-                                                    <td className="px-4 py-4 align-top"><div className="text-gray-900 font-medium text-sm break-words">{row[columnKeys.drug] || '-'}</div><div className="text-xs text-gray-500 mt-1 flex items-start gap-1"><Icon name="syringe" size={12} className="mt-0.5 min-w-[12px]" /><span className="break-words">{row[columnKeys.usage] || '-'}</span></div></td>
-                                                    <td className="px-4 py-4 text-center text-gray-700 align-top pt-5"><span className="inline-block">{getFormattedDate(row[columnKeys.lastVisit])}</span></td>
-                                                    <td className="px-4 py-4 text-center align-top pt-4">
-                                                        <div className="flex flex-col items-center max-w-full">
-                                                            <span className={`px-3 py-1 rounded-full text-xs font-medium border inline-block ${isOverdue ? 'bg-red-50 text-red-700 border-red-100' : 'bg-brand-50 text-brand-700 border-brand-100'}`}>
-                                                                {getFormattedDate(row[columnKeys.nextVisit])}
-                                                            </span>
-                                                            {dateDiffInfo && (
-                                                                <span className={`text-[10px] mt-1 font-medium ml-1 break-words ${dateDiffInfo.colorClass}`}>
-                                                                    {dateDiffInfo.text}
-                                                                </span>
-                                                            )}
-                                                            {isOverdue && row[columnKeys.note] && (
-                                                                <div className="mt-1.5 bg-red-100 text-red-800 border border-red-200 px-2 py-1 rounded text-[10px] inline-block break-words">
-                                                                    <span>{row[columnKeys.note]}</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                        {filteredData.length === 0 && (<tr><td colSpan="6" className="text-center py-12 text-gray-400">ไม่พบข้อมูลในสถานที่ฉีดยานี้</td></tr>)}
-                                    </tbody>
-                                </table>
+                            
+                            <div className="w-full overflow-y-auto max-h-[800px] relative border-t border-gray-100 bg-gray-50/50 p-6">
+                                <div className="flex flex-col gap-8">
+                                    {groupedFilteredPatients.map(([site, patients]) => (
+                                        <div key={site} className="w-full bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                            <div className="px-6 py-4 bg-white border-b border-gray-100 flex items-center justify-between">
+                                                <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                                    <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><Icon name="map-pin" size={18} /></div>
+                                                    {site}
+                                                </h4>
+                                                <span className="text-xs font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded-full border border-gray-200">
+                                                    {patients.length} ราย
+                                                </span>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm text-left">
+                                                    <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 border-b">
+                                                        <tr>
+                                                            <th className="px-4 py-3 font-medium w-[5%] text-center">ที่</th>
+                                                            <th className="px-4 py-3 font-medium w-[25%] text-left">ชื่อ-สกุล</th>
+                                                            <th className="px-4 py-3 font-medium w-[20%] text-left">ที่อยู่</th>
+                                                            <th className="px-4 py-3 font-medium w-[20%] text-left">รายการยาที่ใช้</th>
+                                                            <th className="px-4 py-3 font-medium w-[15%] text-center">รับบริการล่าสุด</th>
+                                                            <th className="px-4 py-3 font-medium w-[15%] text-center">นัดครั้งต่อไป</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {patients.map((row, idx) => {
+                                                            const isOverdue = isDateOverdue(row[columnKeys.nextVisit]);
+                                                            const dateDiffInfo = getDateDiffInfo(row[columnKeys.nextVisit]);
+                                                            return (
+                                                                <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                                                    <td className="px-4 py-4 text-center text-gray-500 font-medium align-top pt-5">
+                                                                        {idx + 1}
+                                                                    </td>
+                                                                    <td className="px-4 py-4 align-top">
+                                                                        <div className="font-bold text-gray-900 text-base whitespace-nowrap">{row[columnKeys.fullname] || '-'}</div>
+                                                                        <div className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                                                                            <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 border border-gray-200">HN {row[columnKeys.hn] || '-'}</span>
+                                                                            <span>อายุ {row[columnKeys.age] || '-'} ปี</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-4 py-4 align-top">
+                                                                        <div className="text-gray-900 leading-relaxed break-words text-sm">
+                                                                            {row[columnKeys.houseNo] || ''} {row[columnKeys.moo] ? `หมู่ ${row[columnKeys.moo]}` : ''} {row[columnKeys.tambon] ? `ต.${row[columnKeys.tambon]}` : ''}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-4 py-4 align-top">
+                                                                        <div className="text-brand-700 font-medium text-sm break-words">{row[columnKeys.drug] || '-'}</div>
+                                                                        <div className="text-xs text-gray-500 mt-1 flex items-start gap-1 not-italic">
+                                                                            <Icon name="syringe" size={12} className="mt-0.5 min-w-[12px] text-gray-400" />
+                                                                            <span className="break-words">{row[columnKeys.usage] || '-'}</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-4 py-4 text-center text-gray-700 align-top pt-5">
+                                                                        <span className="inline-block bg-gray-50 px-2 py-1 rounded border border-gray-100 text-xs">
+                                                                            {getFormattedDate(row[columnKeys.lastVisit])}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-4 text-center align-top pt-4">
+                                                                        <div className="flex flex-col items-center max-w-full">
+                                                                            <span className={`px-3 py-1 rounded-full text-xs font-medium border inline-block whitespace-nowrap ${isOverdue ? 'bg-red-50 text-red-700 border-red-100' : 'bg-brand-50 text-brand-700 border-brand-100'}`}>
+                                                                                {getFormattedDate(row[columnKeys.nextVisit])}
+                                                                            </span>
+                                                                            {dateDiffInfo && (
+                                                                                <span className={`text-[10px] mt-1 font-medium ml-1 break-words ${dateDiffInfo.colorClass}`}>
+                                                                                    {dateDiffInfo.text}
+                                                                                </span>
+                                                                            )}
+                                                                            {isOverdue && row[columnKeys.note] && (
+                                                                                <div className="mt-1.5 bg-red-100 text-red-800 border border-red-200 px-2 py-1 rounded text-[10px] inline-block break-words max-w-[140px]">
+                                                                                    <span>{row[columnKeys.note]}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {filteredData.length === 0 && (
+                                        <div className="text-center py-12 text-gray-400 flex flex-col items-center justify-center">
+                                            <Icon name="search-x" size={48} className="mb-2 opacity-20" />
+                                            ไม่พบข้อมูลผู้ป่วยในเงื่อนไขนี้
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* NEW: Overdue Patient Details Card */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-8">
+                            <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+                                <div className="flex items-center gap-3">
+                                    <Icon name="user-x" size={24} className="text-red-600" />
+                                    <div>
+                                        <h3 className="text-lg font-bold text-gray-800 leading-none">รายละเอียดผู้ป่วยขาดนัด</h3>
+                                        <p className="text-sm text-gray-500 mt-1">
+                                            แสดงผล: {groupedOverduePatients.reduce((acc, curr) => acc + curr[1].length, 0)} ราย
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="w-full sm:w-72">
+                                    <div className="relative">
+                                        <select 
+                                            className="w-full pl-4 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm appearance-none cursor-pointer"
+                                            value={overdueSiteFilter}
+                                            onChange={(e) => setOverdueSiteFilter(e.target.value)}
+                                        >
+                                            <option value="ทั้งอำเภอ">ทั้งอำเภอ</option><option value="รพ.กุสุมาลย์">รพ.กุสุมาลย์</option><option value="บ้านบอน">บ้านบอน</option><option value="นาเพียงใหม่">นาเพียงใหม่</option><option value="โพธิไพศาล">โพธิไพศาล</option><option value="ห้วยกอก">ห้วยกอก</option><option value="แสนพัน">แสนพัน</option><option value="หนองบัวสร้าง">หนองบัวสร้าง</option>
+                                        </select>
+                                        <div className="absolute right-3 top-2.5 pointer-events-none text-gray-400"><Icon name="chevron-down" size={16} /></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="w-full overflow-y-auto max-h-[800px] relative border-t border-gray-100 bg-red-50/30 p-6">
+                                <div className="flex flex-col gap-8">
+                                    {groupedOverduePatients.map(([site, patients]) => (
+                                        <div key={site} className="w-full bg-white rounded-xl shadow-sm border border-red-100 overflow-hidden">
+                                            <div className="px-6 py-4 bg-white border-b border-gray-100 flex items-center justify-between">
+                                                <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                                    <div className="p-1.5 bg-red-50 text-red-600 rounded-lg"><Icon name="map-pin" size={18} /></div>
+                                                    {site}
+                                                </h4>
+                                                <span className="text-xs font-bold bg-red-50 text-red-600 px-3 py-1 rounded-full border border-red-100">
+                                                    {patients.length} ราย
+                                                </span>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm text-left">
+                                                    <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 border-b">
+                                                        <tr>
+                                                            <th className="px-4 py-3 font-medium w-[5%] text-center">ที่</th>
+                                                            <th className="px-4 py-3 font-medium w-[25%] text-left">ชื่อ-สกุล</th>
+                                                            <th className="px-4 py-3 font-medium w-[20%] text-left">ที่อยู่</th>
+                                                            <th className="px-4 py-3 font-medium w-[20%] text-left">รายการยาที่ใช้</th>
+                                                            <th className="px-4 py-3 font-medium w-[15%] text-center">รับบริการล่าสุด</th>
+                                                            <th className="px-4 py-3 font-medium w-[15%] text-center">นัดครั้งต่อไป</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {patients.map((row, idx) => {
+                                                            const isOverdue = true; // Always true here
+                                                            const dateDiffInfo = getDateDiffInfo(row[columnKeys.nextVisit]);
+                                                            return (
+                                                                <tr key={idx} className="hover:bg-red-50/50 transition-colors">
+                                                                    <td className="px-4 py-4 text-center text-gray-500 font-medium align-top pt-5">
+                                                                        {idx + 1}
+                                                                    </td>
+                                                                    <td className="px-4 py-4 align-top">
+                                                                        <div className="font-bold text-gray-900 text-base whitespace-nowrap">{row[columnKeys.fullname] || '-'}</div>
+                                                                        <div className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                                                                            <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 border border-gray-200">HN {row[columnKeys.hn] || '-'}</span>
+                                                                            <span>อายุ {row[columnKeys.age] || '-'} ปี</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-4 py-4 align-top">
+                                                                        <div className="text-gray-900 leading-relaxed break-words text-sm">
+                                                                            {row[columnKeys.houseNo] || ''} {row[columnKeys.moo] ? `หมู่ ${row[columnKeys.moo]}` : ''} {row[columnKeys.tambon] ? `ต.${row[columnKeys.tambon]}` : ''}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-4 py-4 align-top">
+                                                                        <div className="text-brand-700 font-medium text-sm break-words">{row[columnKeys.drug] || '-'}</div>
+                                                                        <div className="text-xs text-gray-500 mt-1 flex items-start gap-1 not-italic">
+                                                                            <Icon name="syringe" size={12} className="mt-0.5 min-w-[12px] text-gray-400" />
+                                                                            <span className="break-words">{row[columnKeys.usage] || '-'}</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-4 py-4 text-center text-gray-700 align-top pt-5">
+                                                                        <span className="inline-block bg-gray-50 px-2 py-1 rounded border border-gray-100 text-xs">
+                                                                            {getFormattedDate(row[columnKeys.lastVisit])}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-4 text-center align-top pt-4">
+                                                                        <div className="flex flex-col items-center max-w-full">
+                                                                            <span className="px-3 py-1 rounded-full text-xs font-medium border inline-block whitespace-nowrap bg-red-50 text-red-700 border-red-100">
+                                                                                {getFormattedDate(row[columnKeys.nextVisit])}
+                                                                            </span>
+                                                                            {dateDiffInfo && (
+                                                                                <span className={`text-[10px] mt-1 font-medium ml-1 break-words ${dateDiffInfo.colorClass}`}>
+                                                                                    {dateDiffInfo.text}
+                                                                                </span>
+                                                                            )}
+                                                                            {row[columnKeys.note] && (
+                                                                                <div className="mt-1.5 bg-red-100 text-red-800 border border-red-200 px-2 py-1 rounded text-[10px] inline-block break-words max-w-[140px]">
+                                                                                    <span>{row[columnKeys.note]}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {groupedOverduePatients.length === 0 && (
+                                        <div className="text-center py-12 text-gray-400 flex flex-col items-center justify-center">
+                                            <Icon name="check-circle" size={48} className="mb-2 text-green-400 opacity-50" />
+                                            ไม่พบผู้ป่วยขาดนัดในเงื่อนไขนี้
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </main>
