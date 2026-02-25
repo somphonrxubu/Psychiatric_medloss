@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบติดตามผู้ป่วยที่ได้รับยาฉีด คลินิกฟ้าใส โรงพยาบาลกุสุมาลย์ จังหวัดสกลนคร</title>
+    <title>ระบบติดตามผู้ป่วยที่ได้รับยาฉีด คลินิกฟ้าใส โรงพยาบาลกุสุมาลย์</title>
     
     <!-- Fonts: Prompt -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -307,9 +307,12 @@
             const [data, setData] = useState([]);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
-            const [selectedSite, setSelectedSite] = useState('ทั้งอำเภอ');
-            const [upcomingSiteFilter, setUpcomingSiteFilter] = useState('ทั้งอำเภอ');
-            const [overdueSiteFilter, setOverdueSiteFilter] = useState('ทั้งอำเภอ');
+            
+            // Search States
+            const [upcomingSearch, setUpcomingSearch] = useState('');
+            const [allPatientsSearch, setAllPatientsSearch] = useState('');
+            const [overdueSearch, setOverdueSearch] = useState('');
+            
             const [columnKeys, setColumnKeys] = useState({});
             
             const [stats, setStats] = useState({
@@ -508,10 +511,20 @@
                 }
             }, [stats, loading]);
 
+            // Helper to check if an item matches search text
+            const matchesSearch = (item, searchTerm) => {
+                if (!searchTerm || searchTerm.trim() === '') return true;
+                const term = searchTerm.toLowerCase().trim();
+                const name = String(item[columnKeys.fullname] || '').toLowerCase();
+                const hn = String(item[columnKeys.hn] || '').toLowerCase();
+                const site = String(item[columnKeys.site] || '').toLowerCase();
+                return name.includes(term) || hn.includes(term) || site.includes(term);
+            };
+
             const filteredData = useMemo(() => {
                 let res = data;
-                if (selectedSite !== 'ทั้งอำเภอ') {
-                    res = res.filter(item => String(item[columnKeys.site] || '').trim() === selectedSite);
+                if (allPatientsSearch.trim() !== '') {
+                    res = res.filter(item => matchesSearch(item, allPatientsSearch));
                 }
                 return [...res].sort((a, b) => {
                     if (!columnKeys.nextVisit) return 0;
@@ -524,7 +537,7 @@
                     const siteB = String(b[columnKeys.site] || '');
                     return siteA.localeCompare(siteB, 'th');
                 });
-            }, [data, selectedSite, columnKeys]);
+            }, [data, allPatientsSearch, columnKeys]);
 
             // Group filtered data by site for the card view
             const groupedFilteredPatients = useMemo(() => {
@@ -551,8 +564,8 @@
             const groupedOverduePatients = useMemo(() => {
                 let res = data.filter(item => isDateOverdue(item[columnKeys.nextVisit]));
 
-                if (overdueSiteFilter !== 'ทั้งอำเภอ') {
-                    res = res.filter(item => String(item[columnKeys.site] || '').trim() === overdueSiteFilter);
+                if (overdueSearch.trim() !== '') {
+                    res = res.filter(item => matchesSearch(item, overdueSearch));
                 }
 
                 const sortedRes = [...res].sort((a, b) => {
@@ -584,7 +597,7 @@
                     if (valA !== valB) return valA - valB;
                     return a[0].localeCompare(b[0], 'th');
                 });
-            }, [data, overdueSiteFilter, columnKeys]);
+            }, [data, overdueSearch, columnKeys]);
 
             // Calculate Upcoming Activities using ONLY "Usage" Column logic - Window: 3 Days
             const upcomingActivities = useMemo(() => {
@@ -602,8 +615,7 @@
 
                 data.forEach(item => {
                     const usage = item[columnKeys.usage];
-                    const site = String(item[columnKeys.site] || 'ไม่ระบุ').trim();
-                    if (upcomingSiteFilter !== 'ทั้งอำเภอ' && site !== upcomingSiteFilter) return;
+                    if (!matchesSearch(item, upcomingSearch)) return;
 
                     if (!usage) return;
 
@@ -643,7 +655,7 @@
                 });
 
                 return sortedEntries;
-            }, [data, columnKeys, upcomingSiteFilter]);
+            }, [data, columnKeys, upcomingSearch]);
 
             const topSiteEntry = useMemo(() => Object.entries(stats.bySite).sort((a,b)=>b[1]-a[1])[0] || [null, 0], [stats.bySite]);
             const topDrugEntry = useMemo(() => Object.entries(stats.byDrug).sort((a,b)=>b[1]-a[1])[0] || [null, 0], [stats.byDrug]);
@@ -741,7 +753,7 @@
                             </div>
                         </div>
 
-                        {/* Upcoming Activities Card - Fixed Array Iteration */}
+                        {/* Upcoming Activities Card - Replaced filter with search box */}
                         <div className="mb-8">
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -754,23 +766,16 @@
                                     </div>
                                     <div className="w-full sm:w-72">
                                         <div className="relative">
-                                            <select 
-                                                className="w-full pl-4 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm appearance-none cursor-pointer"
-                                                value={upcomingSiteFilter}
-                                                onChange={(e) => setUpcomingSiteFilter(e.target.value)}
-                                            >
-                                                <option value="ทั้งอำเภอ">ทั้งอำเภอ</option>
-                                                <option value="รพ.กุสุมาลย์">รพ.กุสุมาลย์</option>
-                                                <option value="บ้านบอน">บ้านบอน</option>
-                                                <option value="นาเพียงใหม่">นาเพียงใหม่</option>
-                                                <option value="โพธิไพศาล">โพธิไพศาล</option>
-                                                <option value="ห้วยกอก">ห้วยกอก</option>
-                                                <option value="แสนพัน">แสนพัน</option>
-                                                <option value="หนองบัวสร้าง">หนองบัวสร้าง</option>
-                                            </select>
-                                            <div className="absolute right-3 top-2.5 pointer-events-none text-gray-400">
-                                                <Icon name="chevron-down" size={16} />
+                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                                <Icon name="search" size={16} />
                                             </div>
+                                            <input 
+                                                type="text"
+                                                placeholder="ค้นหาชื่อ, HN, สถานที่..."
+                                                className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm transition-all"
+                                                value={upcomingSearch}
+                                                onChange={(e) => setUpcomingSearch(e.target.value)}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -819,25 +824,27 @@
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200"><Icon name="calendar-range" size={48} className="mb-3 opacity-20" /><p className="text-sm">ไม่มีนัดหมายฉีดยาในช่วง 3 วันนี้</p></div>
+                                    <div className="py-12 flex flex-col items-center justify-center text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200"><Icon name="search-x" size={48} className="mb-3 opacity-20" /><p className="text-sm">ไม่พบข้อมูลที่ตรงกับการค้นหา</p></div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Table Card (All Patients) */}
+                        {/* Table Card (All Patients) - Replaced filter with search box */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                             <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
                                 <div className="flex items-center gap-3"><Icon name="clipboard-list" size={24} className="text-brand-500" /><div><h3 className="text-lg font-bold text-gray-800 leading-none">รายละเอียดผู้ป่วยทั้งหมด</h3><p className="text-sm text-gray-500 mt-1">แสดงผล: {filteredData.length} ราย</p></div></div>
                                 <div className="w-full sm:w-72">
                                     <div className="relative">
-                                        <select 
-                                            className="w-full pl-4 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm appearance-none cursor-pointer"
-                                            value={selectedSite}
-                                            onChange={(e) => setSelectedSite(e.target.value)}
-                                        >
-                                            <option value="ทั้งอำเภอ">ทั้งอำเภอ</option><option value="รพ.กุสุมาลย์">รพ.กุสุมาลย์</option><option value="บ้านบอน">บ้านบอน</option><option value="นาเพียงใหม่">นาเพียงใหม่</option><option value="โพธิไพศาล">โพธิไพศาล</option><option value="ห้วยกอก">ห้วยกอก</option><option value="แสนพัน">แสนพัน</option><option value="หนองบัวสร้าง">หนองบัวสร้าง</option>
-                                        </select>
-                                        <div className="absolute right-3 top-2.5 pointer-events-none text-gray-400"><Icon name="chevron-down" size={16} /></div>
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                            <Icon name="search" size={16} />
+                                        </div>
+                                        <input 
+                                            type="text"
+                                            placeholder="ค้นหาชื่อ, HN, สถานที่..."
+                                            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm transition-all"
+                                            value={allPatientsSearch}
+                                            onChange={(e) => setAllPatientsSearch(e.target.value)}
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -928,14 +935,14 @@
                                     {filteredData.length === 0 && (
                                         <div className="text-center py-12 text-gray-400 flex flex-col items-center justify-center">
                                             <Icon name="search-x" size={48} className="mb-2 opacity-20" />
-                                            ไม่พบข้อมูลผู้ป่วยในเงื่อนไขนี้
+                                            ไม่พบข้อมูลที่ตรงกับการค้นหา
                                         </div>
                                     )}
                                 </div>
                             </div>
                         </div>
 
-                        {/* NEW: Overdue Patient Details Card */}
+                        {/* NEW: Overdue Patient Details Card - Replaced filter with search box */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-8">
                             <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
                                 <div className="flex items-center gap-3">
@@ -949,14 +956,16 @@
                                 </div>
                                 <div className="w-full sm:w-72">
                                     <div className="relative">
-                                        <select 
-                                            className="w-full pl-4 pr-10 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm appearance-none cursor-pointer"
-                                            value={overdueSiteFilter}
-                                            onChange={(e) => setOverdueSiteFilter(e.target.value)}
-                                        >
-                                            <option value="ทั้งอำเภอ">ทั้งอำเภอ</option><option value="รพ.กุสุมาลย์">รพ.กุสุมาลย์</option><option value="บ้านบอน">บ้านบอน</option><option value="นาเพียงใหม่">นาเพียงใหม่</option><option value="โพธิไพศาล">โพธิไพศาล</option><option value="ห้วยกอก">ห้วยกอก</option><option value="แสนพัน">แสนพัน</option><option value="หนองบัวสร้าง">หนองบัวสร้าง</option>
-                                        </select>
-                                        <div className="absolute right-3 top-2.5 pointer-events-none text-gray-400"><Icon name="chevron-down" size={16} /></div>
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                            <Icon name="search" size={16} />
+                                        </div>
+                                        <input 
+                                            type="text"
+                                            placeholder="ค้นหาชื่อ, HN, สถานที่..."
+                                            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm transition-all"
+                                            value={overdueSearch}
+                                            onChange={(e) => setOverdueSearch(e.target.value)}
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -1046,8 +1055,8 @@
                                     ))}
                                     {groupedOverduePatients.length === 0 && (
                                         <div className="text-center py-12 text-gray-400 flex flex-col items-center justify-center">
-                                            <Icon name="check-circle" size={48} className="mb-2 text-green-400 opacity-50" />
-                                            ไม่พบผู้ป่วยขาดนัดในเงื่อนไขนี้
+                                            <Icon name="search-x" size={48} className="mb-2 opacity-20" />
+                                            ไม่พบข้อมูลที่ตรงกับการค้นหา
                                         </div>
                                     )}
                                 </div>
