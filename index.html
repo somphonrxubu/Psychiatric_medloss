@@ -255,14 +255,21 @@
                 const results = [];
                 const text = String(usageText).toLowerCase();
 
+                // หาจำนวนวันสูงสุดในเดือนนั้นๆ (เช่น ก.พ. มี 28 หรือ 29 วัน, เม.ย. มี 30 วัน)
+                const maxDaysInMonth = new Date(yearAD, monthIndex + 1, 0).getDate();
+
                 if (text.includes('ทุกวันที่')) {
                     const dayPart = text.split('ทุกวันที่')[1];
                     if (dayPart) {
                         const matches = dayPart.match(/\d+/g);
                         if (matches) {
                             matches.forEach(dayStr => {
-                                const dayNum = parseInt(dayStr);
+                                let dayNum = parseInt(dayStr);
                                 if (!isNaN(dayNum)) {
+                                    // ถ้าวันที่ฉีดมากกว่าจำนวนวันในเดือนนั้น ให้เลื่อนมาเป็นวันสุดท้ายของเดือน
+                                    if (dayNum > maxDaysInMonth) {
+                                        dayNum = maxDaysInMonth;
+                                    }
                                     const date = new Date(yearAD, monthIndex, dayNum);
                                     if (date.getMonth() === monthIndex) results.push(date);
                                 }
