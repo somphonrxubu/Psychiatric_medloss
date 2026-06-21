@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบติดตามผู้ป่วยที่ได้รับยาฉีด คลินิกฟ้าใส โรงพยาบาลกุสุมาลย์</title>
+    <title>ระบบติดตามผู้ป่วยจิตเวชยาฉีด อ.กุสุมาลย์</title>
     
     <!-- Fonts: Prompt -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,6 +19,14 @@
     
     <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+        // บังคับให้ Babel ใช้ JSX แบบ Classic เพื่อป้องกันปัญหา react/jsx-runtime และ import statement error
+        Babel.registerPreset('react-classic', {
+            presets: [
+                [Babel.availablePresets.react, { runtime: "classic" }]
+            ]
+        });
+    </script>
     
     <!-- Chart.js & Datalabels Plugin -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -68,7 +76,8 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel">
+    <!-- ใช้ preset ที่สร้างไว้เพื่อไม่ให้เกิด Error -->
+    <script type="text/babel" data-presets="react-classic">
         // Safely Register ChartDataLabels plugin
         try {
             if (typeof Chart !== 'undefined' && typeof ChartDataLabels !== 'undefined') {
